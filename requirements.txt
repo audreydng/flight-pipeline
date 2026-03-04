@@ -1,0 +1,4 @@
+# Airflow container dependencies (for DAG plugins)
+psycopg2-binary==2.9.11
+pymongo==4.16.0
+pandas
