@@ -4,6 +4,8 @@ A full-stack data engineering project: real-time flight tracking streamed throug
 
 <img src="architecture.png" alt="Architecture">
 
+<img src="demo.gif" alt="Demo">
+
 
 ## Table of Contents
 * [Tech Stack](#tech-stack)
