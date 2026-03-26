@@ -1,15 +1,15 @@
 # Flight Map API
-# Local access: http://localhost:5000/api/flights
-# Docker: http://host.docker.internal:5000/api/flights
+# Local access: http://localhost:5001/api/flights
+# Docker: http://host.docker.internal:5001/api/flights
 
-from flask import Flask, jsonify
+from fastapi import FastAPI, HTTPException
 from datetime import datetime, timedelta
 import random
 import math
 import threading
 import time
 
-app = Flask(__name__)
+app = FastAPI(title="Flight Map API")
 
 
 # FLIGHT DATA
@@ -78,20 +78,18 @@ class FlightSimulator:
     def _create_flight(self):
         dep = random.choice(AIRPORTS)
         arr = random.choice([a for a in AIRPORTS if a["city"] != dep["city"]])
-        
+
         distance = haversine_distance(dep["lat"], dep["lon"], arr["lat"], arr["lon"])
         speed_kmh = random.randint(800, 950)
         flight_duration_hours = distance / speed_kmh
         flight_duration_minutes = flight_duration_hours * 60
 
         now = datetime.now()
-        # Some flights departed in the past (active), some very recently
         minutes_ago = random.randint(5, int(max(flight_duration_minutes * 0.9, 30)))
         actual_dep = now - timedelta(minutes=minutes_ago)
         scheduled_dep = actual_dep - timedelta(minutes=random.randint(0, 10))
         scheduled_arr = scheduled_dep + timedelta(minutes=flight_duration_minutes)
 
-        # Calculate initial progress
         elapsed = (now - actual_dep).total_seconds() / 3600
         progress = min(elapsed / flight_duration_hours, 1.0)
 
@@ -140,13 +138,11 @@ class FlightSimulator:
                 flight["progress"] = progress
 
                 if progress >= 1.0:
-                    # Flight has landed
                     flight["flight_status"] = "landed"
                     flight["lat"] = flight["dest_lat"]
                     flight["lon"] = flight["dest_lon"]
                     flight["current_altitude_m"] = 0
                     flight["current_speed_km_h"] = 0
-                    # Add some random delay for realism
                     delay_minutes = random.choice([0, 0, 0, 5, 10, 15, 20, 35, 45])
                     scheduled_arr = datetime.fromisoformat(flight["scheduled_arrival_time"])
                     flight["actual_landed_time"] = (scheduled_arr + timedelta(minutes=delay_minutes)).isoformat()
@@ -156,24 +152,20 @@ class FlightSimulator:
                     }
                     flight["distance_travelled_km"] = round(flight["total_distance_km"], 1)
                 else:
-                    # Interpolate position
-                    dep_lat, dep_lon = flight["lat"], flight["lon"]
-                    # Use original departure coordinates for interpolation
                     orig_dep = AIRPORTS[[a["city"] for a in AIRPORTS].index(flight["departure_city"])]
-                    
+
                     flight["current_location"]["latitude"] = orig_dep["lat"] + (flight["dest_lat"] - orig_dep["lat"]) * progress
                     flight["current_location"]["longitude"] = orig_dep["lon"] + (flight["dest_lon"] - orig_dep["lon"]) * progress
                     flight["lat"] = flight["current_location"]["latitude"]
                     flight["lon"] = flight["current_location"]["longitude"]
-                    
-                    # Altitude: climb -> cruise -> descend
+
                     if progress < 0.1:
                         flight["current_altitude_m"] = int(progress / 0.1 * 11000)
                     elif progress > 0.9:
                         flight["current_altitude_m"] = int((1 - progress) / 0.1 * 11000)
                     else:
                         flight["current_altitude_m"] = 11000 + random.randint(-500, 500)
-                    
+
                     flight["current_speed_km_h"] = flight["speed"] + random.randint(-20, 20)
                     flight["distance_travelled_km"] = round(flight["total_distance_km"] * progress, 1)
                     flight["direction"] = calculate_bearing(
@@ -181,19 +173,17 @@ class FlightSimulator:
                         flight["dest_lat"], flight["dest_lon"]
                     )
 
-            # Replace landed flights with new ones
             landed = [f for f in self.flights if f["flight_status"] == "landed"]
             if len(landed) >= 3 or random.random() < 0.1:
-                for f in landed[:2]:  # Replace up to 2 at a time
+                for f in landed[:2]:
                     self.flights.remove(f)
                     self._create_flight()
 
     def get_flights(self):
         with self.lock:
-            # Return clean data (remove internal fields)
             result = []
             for f in self.flights:
-                clean = {k: v for k, v in f.items() 
+                clean = {k: v for k, v in f.items()
                         if k not in ("progress", "total_distance_km", "flight_duration_hours")}
                 result.append(clean)
             return result
@@ -209,43 +199,47 @@ def background_updater():
         simulator.update_flights()
         time.sleep(1)
 
-# Start background thread
 updater_thread = threading.Thread(target=background_updater, daemon=True)
 updater_thread.start()
 
+
 # API ROUTES
-@app.route('/api/flights', methods=['GET'])
+
+@app.get("/api/flights")
 def get_flights():
     flights = simulator.get_flights()
-    return jsonify({
+    return {
         "flights": flights,
         "count": len(flights),
         "timestamp": datetime.now().isoformat()
-    })
+    }
 
-@app.route('/api/flights/<int:flight_id>', methods=['GET'])
-def get_flight(flight_id):
+@app.get("/api/flights/{flight_id}")
+def get_flight(flight_id: int):
     flights = simulator.get_flights()
     flight = next((f for f in flights if f["flight_id"] == flight_id), None)
-    if flight:
-        return jsonify(flight)
-    return jsonify({"error": "Flight not found"}), 404
+    if not flight:
+        raise HTTPException(status_code=404, detail="Flight not found")
+    return flight
 
-@app.route('/', methods=['GET'])
+@app.get("/")
 def index():
-    return jsonify({
+    return {
         "message": "Flight Map API",
         "endpoints": {
             "all_flights": "/api/flights",
-            "single_flight": "/api/flights/<id>"
+            "single_flight": "/api/flights/{id}",
+            "docs": "/docs"
         }
-    })
+    }
+
 
 # RUN
 if __name__ == '__main__':
+    import uvicorn
     print("=" * 50)
     print("  Flight Map API Started")
     print("  Local:  http://localhost:5001/api/flights")
-    print("  Docker: http://host.docker.internal:5001/api/flights")
+    print("  Docs:   http://localhost:5001/docs")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=5001, reload=False)

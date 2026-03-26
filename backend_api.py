@@ -1,16 +1,22 @@
 # Backend API for the frontend to fetch data from MongoDB and PostgreSQL
-# # Local access: http://localhost:5002
+# Local access: http://localhost:5002
 
-from flask import Flask, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from datetime import datetime
 import psycopg2
 import logging
 import os
 
-app = Flask(__name__)
-CORS(app)  # Allows frontend to call API
+app = FastAPI(title="Flight Pipeline Backend API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("BackendAPI")
@@ -33,7 +39,8 @@ PG_CONFIG = {
 
 
 # MONGODB ENDPOINTS — Real-time flight data
-@app.route('/api/live-flights', methods=['GET'])
+
+@app.get("/api/live-flights")
 def get_live_flights():
     """Get active flights from MongoDB (real-time data from Spark)"""
     try:
@@ -41,40 +48,31 @@ def get_live_flights():
         db = client[MONGO_DB]
         col = db[MONGO_COLLECTION]
 
-        # Get latest flights (active ones)
-        active = list(col.find(
-            {"flight_status": "active"},
-            {"_id": 0}
-        ).sort("_id", -1).limit(50))
-
-        # Get recently landed
-        landed = list(col.find(
-            {"flight_status": "landed"},
-            {"_id": 0}
-        ).sort("_id", -1).limit(20))
+        active = list(col.find({"flight_status": "active"}, {"_id": 0}).sort("_id", -1).limit(50))
+        landed = list(col.find({"flight_status": "landed"}, {"_id": 0}).sort("_id", -1).limit(20))
 
         client.close()
 
-        return jsonify({
+        return {
             "active_flights": active,
             "landed_flights": landed,
             "active_count": len(active),
             "landed_count": len(landed),
             "timestamp": datetime.now().isoformat()
-        })
+        }
     except Exception as e:
         logger.error(f"MongoDB error: {e}")
-        return jsonify({
+        return {
             "active_flights": [],
             "landed_flights": [],
             "active_count": 0,
             "landed_count": 0,
             "timestamp": datetime.now().isoformat(),
             "error": "MongoDB unavailable"
-        })
+        }
 
 
-@app.route('/api/mongo-stats', methods=['GET'])
+@app.get("/api/mongo-stats")
 def get_mongo_stats():
     """Get MongoDB collection statistics"""
     try:
@@ -85,33 +83,31 @@ def get_mongo_stats():
         total = col.count_documents({})
         active = col.count_documents({"flight_status": "active"})
         landed = col.count_documents({"flight_status": "landed"})
-
-        # Get unique airlines
         airlines = col.distinct("airline")
 
         client.close()
 
-        return jsonify({
+        return {
             "total_records": total,
             "active_flights": active,
             "landed_flights": landed,
             "unique_airlines": len(airlines),
             "airlines": sorted(airlines) if airlines else []
-        })
+        }
     except Exception as e:
         logger.error(f"MongoDB stats error: {e}")
-        return jsonify({
+        return {
             "total_records": 0,
             "active_flights": 0,
             "landed_flights": 0,
             "unique_airlines": 0,
             "airlines": [],
             "error": "MongoDB unavailable"
-        })
+        }
 
 
-# POSTGRESQL ENDPOINTS - Processed/reported data
-# 
+# POSTGRESQL ENDPOINTS — Processed/reported data
+
 def pg_query(query, params=None):
     """Helper to run PostgreSQL queries"""
     conn = psycopg2.connect(**PG_CONFIG)
@@ -123,25 +119,18 @@ def pg_query(query, params=None):
     return [dict(zip(cols, row)) for row in rows]
 
 
-@app.route('/api/pg-flights', methods=['GET'])
+@app.get("/api/pg-flights")
 def get_pg_flights():
     """Get processed flights from PostgreSQL"""
     try:
-        flights = pg_query("""
-            SELECT * FROM flights
-            ORDER BY inserted_at DESC
-            LIMIT 100
-        """)
-        return jsonify({
-            "flights": flights,
-            "count": len(flights)
-        })
+        flights = pg_query("SELECT * FROM flights ORDER BY inserted_at DESC LIMIT 100")
+        return {"flights": flights, "count": len(flights)}
     except Exception as e:
         logger.error(f"PostgreSQL flights error: {e}")
-        return jsonify({"flights": [], "count": 0, "error": "PostgreSQL unavailable"})
+        return {"flights": [], "count": 0, "error": "PostgreSQL unavailable"}
 
 
-@app.route('/api/delay-distribution', methods=['GET'])
+@app.get("/api/delay-distribution")
 def get_delay_distribution():
     """Delay status distribution from PostgreSQL"""
     try:
@@ -152,13 +141,13 @@ def get_delay_distribution():
             GROUP BY delayed_status
             ORDER BY count DESC
         """)
-        return jsonify({"distribution": data})
+        return {"distribution": data}
     except Exception as e:
         logger.error(f"Delay distribution error: {e}")
-        return jsonify({"distribution": [], "error": "PostgreSQL unavailable"})
+        return {"distribution": [], "error": "PostgreSQL unavailable"}
 
 
-@app.route('/api/top-airlines', methods=['GET'])
+@app.get("/api/top-airlines")
 def get_top_airlines():
     """Top airlines by flight count from PostgreSQL"""
     try:
@@ -169,13 +158,13 @@ def get_top_airlines():
             ORDER BY flight_count DESC
             LIMIT 10
         """)
-        return jsonify({"airlines": data})
+        return {"airlines": data}
     except Exception as e:
         logger.error(f"Top airlines error: {e}")
-        return jsonify({"airlines": [], "error": "PostgreSQL unavailable"})
+        return {"airlines": [], "error": "PostgreSQL unavailable"}
 
 
-@app.route('/api/delay-ratio', methods=['GET'])
+@app.get("/api/delay-ratio")
 def get_delay_ratio():
     """Airlines with highest delay ratio from PostgreSQL"""
     try:
@@ -195,21 +184,19 @@ def get_delay_ratio():
             ORDER BY late_pct DESC
             LIMIT 10
         """)
-        return jsonify({"airlines": data})
+        return {"airlines": data}
     except Exception as e:
         logger.error(f"Delay ratio error: {e}")
-        return jsonify({"airlines": [], "error": "PostgreSQL unavailable"})
-
+        return {"airlines": [], "error": "PostgreSQL unavailable"}
 
 
 # PIPELINE STATUS
 
-@app.route('/api/pipeline-status', methods=['GET'])
+@app.get("/api/pipeline-status")
 def get_pipeline_status():
     """Check health of all pipeline components"""
     status = {}
 
-    # Check MongoDB
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
         client.admin.command('ping')
@@ -219,7 +206,6 @@ def get_pipeline_status():
     except Exception as e:
         status["mongodb"] = {"status": "disconnected", "error": str(e)}
 
-    # Check PostgreSQL
     try:
         conn = psycopg2.connect(**PG_CONFIG, connect_timeout=3)
         cur = conn.cursor()
@@ -230,15 +216,15 @@ def get_pipeline_status():
     except Exception as e:
         status["postgresql"] = {"status": "disconnected", "error": str(e)}
 
-    return jsonify({
+    return {
         "pipeline": status,
         "timestamp": datetime.now().isoformat()
-    })
+    }
 
 
-@app.route('/', methods=['GET'])
+@app.get("/")
 def index():
-    return jsonify({
+    return {
         "message": "Flight Pipeline Backend API",
         "endpoints": {
             "live_flights": "/api/live-flights",
@@ -248,13 +234,16 @@ def index():
             "top_airlines": "/api/top-airlines",
             "delay_ratio": "/api/delay-ratio",
             "pipeline_status": "/api/pipeline-status",
+            "docs": "/docs"
         }
-    })
+    }
 
 
 if __name__ == '__main__':
+    import uvicorn
     print("=" * 50)
     print("  Flight Pipeline Backend API")
     print("  http://localhost:5002")
+    print("  Docs: http://localhost:5002/docs")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5002, debug=True)
+    uvicorn.run("backend_api:app", host="0.0.0.0", port=5002, reload=False)
