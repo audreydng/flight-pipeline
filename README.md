@@ -10,7 +10,7 @@ A full-stack data engineering project: real-time flight tracking streamed throug
 * [Prerequisites](#prerequisites)
 * [Setup](#setup)
   * [1. Clone and configure](#1-clone-and-configure)
-  * [2. Install Python dependencies](#2-install-python-dependencies)
+  * [2. Install frontend dependencies](#2-install-frontend-dependencies)
 * [Running the full stack](#running-the-full-stack)
 * [Service URLs](#service-urls)
 * [API Reference](#api-reference)
@@ -50,20 +50,12 @@ cp .env.example .env
 # Edit .env — change passwords before deploying anywhere public
 ```
 
-### 2. Install Python dependencies (for local Flask apps)
+### 2. Install frontend dependencies
 
 ```bash
-pip install flask flask-cors pymongo psycopg2-binary requests
-```
-
-### 3. Install dashboard dependencies
-
-```bash
-cd ../dashboard
+cd frontend/
 npm install
 ```
-
-
 
 ## Running the full stack
 
@@ -89,23 +81,7 @@ Wait about 1 minute for all containers to be healthy:
 docker compose ps
 ```
 
-### Step 2 - Data source API
-
-```bash
-cd pipeline/
-python app.py
-# Simulated flight data at http://localhost:5001/api/flights
-```
-
-### Step 3 - Backend API
-
-```bash
-cd pipeline/
-python backend_api.py
-# Dashboard data API at http://localhost:5002
-```
-
-### Step 4 - Spark streaming (2 terminals)
+### Step 2 - Spark streaming (2 terminals)
 
 ```bash
 # Terminal A - Producer: polls app.py every 5s, sends to Kafka
@@ -125,7 +101,7 @@ docker exec spark-master /opt/spark/bin/spark-submit \
 
 > First run downloads about 100MB of Spark/Kafka JARs from Maven. Subsequent runs use cache.
 
-### Step 5 - Dashboard
+### Step 3 - Dashboard
 
 ```bash
 cd dashboard/
@@ -139,6 +115,10 @@ Go to [http://localhost:8080](http://localhost:8080) to login with credentials f
 
 This populates PostgreSQL with landed flights and generates CSV reports in `pipeline/outputs/`.
 
+Or use CLI: 
+```bash
+docker exec -it $(docker ps -qf "name=webserver") airflow dags trigger flights_dag
+```
 
 
 ## Service URLs
