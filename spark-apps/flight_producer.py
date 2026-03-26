@@ -10,7 +10,7 @@ logger = logging.getLogger("KafkaFlightProducer")
 
 KAFKA_BOOTSTRAP = 'broker:29092'
 KAFKA_TOPIC = 'flight-producer'
-API_URL = "http://host.docker.internal:5001/api/flights"
+API_URL = "http://flight-simulator:5001/api/flights"
 
 def spark_session():
     return SparkSession.builder \

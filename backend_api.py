@@ -25,7 +25,8 @@ logger = logging.getLogger("BackendAPI")
 
 _mongo_user = os.environ.get("MONGO_ROOT_USERNAME", "root")
 _mongo_pass = os.environ.get("MONGO_ROOT_PASSWORD", "example")
-MONGO_URI = f"mongodb://{_mongo_user}:{_mongo_pass}@localhost:27017"
+_mongo_host = os.environ.get("MONGO_HOST", "localhost")
+MONGO_URI = f"mongodb://{_mongo_user}:{_mongo_pass}@{_mongo_host}:27017"
 MONGO_DB = "flightdb"
 MONGO_COLLECTION = "flights"
 
@@ -33,7 +34,7 @@ PG_CONFIG = {
     "dbname": os.environ.get("POSTGRES_DB", "airflow"),
     "user": os.environ.get("POSTGRES_USER", "airflow"),
     "password": os.environ.get("POSTGRES_PASSWORD", "airflow"),
-    "host": "localhost",
+    "host": os.environ.get("POSTGRES_HOST", "localhost"),
     "port": "5432"
 }
 

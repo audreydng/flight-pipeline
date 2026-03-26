@@ -185,6 +185,38 @@ services:
     networks:
       - confluent
 
+  # --- PYTHON SERVICES ---
+  flight-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: flight-simulator
+    command: uvicorn app:app --host 0.0.0.0 --port 5001
+    ports:
+      - "5001:5001"
+    networks:
+      - confluent
+
+  backend-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: backend-api
+    command: uvicorn backend_api:app --host 0.0.0.0 --port 5002
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env
+    environment:
+      - MONGO_HOST=mongodb
+      - POSTGRES_HOST=postgres
+    depends_on:
+      - mongodb
+      - postgres
+      - flight-simulator
+    networks:
+      - confluent
+
   # --- TOOLS (Optional) ---
   pgadmin:
     image: dpage/pgadmin4

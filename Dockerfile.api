@@ -1,0 +1,4 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir fastapi uvicorn pymongo psycopg2-binary requests
+COPY app.py backend_api.py ./
