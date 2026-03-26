@@ -63,14 +63,16 @@ def get_flight_schema():
 
 
 def write_to_mongo(records):
-    """Write a list of dicts to MongoDB"""
+    """Upsert records into MongoDB by flight_id"""
     try:
+        from pymongo import UpdateOne
         client = MongoClient(MONGO_URI)
         db = client[MONGO_DB]
         collection = db[MONGO_COLLECTION]
         if records:
-            collection.insert_many(records)
-            logger.info(f"Inserted {len(records)} records into MongoDB")
+            ops = [UpdateOne({"flight_id": r["flight_id"]}, {"$set": r}, upsert=True) for r in records]
+            collection.bulk_write(ops)
+            logger.info(f"Upserted {len(records)} records into MongoDB")
         client.close()
     except Exception as e:
         logger.error(f"MongoDB write failed: {e}")

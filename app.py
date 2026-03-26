@@ -151,6 +151,8 @@ class FlightSimulator:
                         "longitude": flight["dest_lon"]
                     }
                     flight["distance_travelled_km"] = round(flight["total_distance_km"], 1)
+                    if "landed_at" not in flight:
+                        flight["landed_at"] = now
                 else:
                     orig_dep = AIRPORTS[[a["city"] for a in AIRPORTS].index(flight["departure_city"])]
 
@@ -173,11 +175,11 @@ class FlightSimulator:
                         flight["dest_lat"], flight["dest_lon"]
                     )
 
-            landed = [f for f in self.flights if f["flight_status"] == "landed"]
-            if len(landed) >= 3 or random.random() < 0.1:
-                for f in landed[:2]:
-                    self.flights.remove(f)
-                    self._create_flight()
+            landed = [f for f in self.flights if f["flight_status"] == "landed"
+                      and (now - f.get("landed_at", now)).total_seconds() > 30]
+            for f in landed:
+                self.flights.remove(f)
+                self._create_flight()
 
     def get_flights(self):
         with self.lock:
