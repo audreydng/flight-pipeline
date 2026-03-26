@@ -69,6 +69,13 @@ npm install
 
 Start services in this order. Each step requires a separate terminal.
 
+### Step 0 - Stop local services (if needed)
+
+```bash
+brew services stop mongodb-community
+brew services stop postgresql@14
+```
+
 ### Step 1 - Infrastructure (Docker)
 
 ```bash
